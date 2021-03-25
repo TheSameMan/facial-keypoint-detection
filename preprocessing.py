@@ -11,7 +11,7 @@ class KeypointDataset(tr.utils.data.Dataset):
     """Dataset of facial images with keypoints
     of the facial contour
     """
-    def __init__(self, root, loader=default_loader, transform=None):
+    def __init__(self, root, transform=None, loader=default_loader):
         super().__init__()
         if isinstance(root, (str, bytes)):
             root = os.path.expanduser(root)
@@ -25,7 +25,6 @@ class KeypointDataset(tr.utils.data.Dataset):
         with os.scandir(root) as itr:
             kpts_file = None
             for entry in itr:
-
                 _, ext = os.path.splitext(entry.name)
                 if ext == '.csv':
                     kpts_file = os.path.join(root, entry.name)
@@ -39,15 +38,15 @@ class KeypointDataset(tr.utils.data.Dataset):
     def __getitem__(self, index):
         names = self.kpts.columns[0]
         path = os.path.join(self.root, self.kpts[names].iloc[index])
-
+ 
         points = self.kpts.columns[1:]
         target = self.kpts[points].iloc[index].to_numpy().reshape(-1, 2)
 
-        sample = self.loader(path)
+        sample = self.loader(path), target
         if self.transform is not None:
             sample = self.transform(sample)
 
-        return sample, target
+        return sample
 
     def __len__(self):
         return len(self.kpts)
