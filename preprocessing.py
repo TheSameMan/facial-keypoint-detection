@@ -19,15 +19,15 @@ class KeypointDataset(tr.utils.data.Dataset):
 
         self.transform = transform
         self.loader = loader
-        self.kpts = self._find_kpts(self.root)
+        self.kpts = self._find_kpts()
 
-    def _find_kpts(self, root):
-        with os.scandir(root) as itr:
+    def _find_kpts(self):
+        with os.scandir(self.root) as itr:
             kpts_file = None
             for entry in itr:
                 _, ext = os.path.splitext(entry.name)
                 if ext == '.csv':
-                    kpts_file = os.path.join(root, entry.name)
+                    kpts_file = os.path.join(self.root, entry.name)
                     kpts = pd.read_csv(kpts_file)
 
             if kpts_file is None:
@@ -38,7 +38,7 @@ class KeypointDataset(tr.utils.data.Dataset):
     def __getitem__(self, index):
         names = self.kpts.columns[0]
         path = os.path.join(self.root, self.kpts[names].iloc[index])
- 
+
         points = self.kpts.columns[1:]
         target = self.kpts[points].iloc[index].to_numpy().reshape(-1, 2)
 
@@ -62,6 +62,18 @@ class CenterCropped(CenterCrop):
 
     def forward(self, sample):
         img, kpts = sample
+        if not isinstance(self.size, (tuple, list)):
+            self.size = (self.size, self.size)
+
+        if self.size != img.size:
+            if img.size[1] != img.size[0] or self.size[1] != self.size[0]:
+                k = (img.size[1] - self.size[1]) / (img.size[0] - self.size[0])
+            else:
+                k = 1
+
+            kpts[:, 0] -= (img.size[0] - self.size[0])*k / 2
+            kpts[:, 1] -= (img.size[1] - self.size[1]) / (2*k)
+
         return super().forward(img), kpts
 
 
@@ -74,6 +86,8 @@ class Resized(Resize):
 
     def forward(self, sample):
         img, kpts = sample
+        if not isinstance(self.size, (tuple, list)):
+            self.size = (self.size, self.size)
         return super().forward(img), kpts * self.size / img.size
 
 
@@ -81,16 +95,18 @@ class Normalized(Normalize):
     """Analogue of the Normalize class for a sample
     containing an image with keypoints
     """
-    def __init__(self, mean=(0.485, 0.456, 0.406),
-                 std=(0.229, 0.224, 0.225), inplace=False):
+    def __init__(self, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225),
+                 kpts_mean=(0, 0), kpts_std=(1, 1), inplace=False):
         super().__init__(mean, std, inplace)
+        self.kpts_mean = tr.as_tensor(kpts_mean)
+        self.kpts_std = tr.as_tensor(kpts_std)
 
     def forward(self, sample):
-        t_img, t_kpts = sample
-
-        t_m, t_s = t_kpts.mean(axis=0), t_kpts.std(axis=0)
-
-        return super().forward(t_img), t_kpts.sub_(t_m).div_(t_s)
+        img, kpts = sample
+        if isinstance(img, tr.Tensor) and isinstance(kpts, tr.Tensor):
+            return (super().forward(img),
+                    kpts.sub_(self.kpts_mean).div_(self.kpts_std))
+        raise TypeError('Normalization requires tensor images and keypoints')
 
 
 class ToTensored(ToTensor):
