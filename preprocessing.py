@@ -98,8 +98,8 @@ class Normalized(Normalize):
     def __init__(self, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225),
                  kpts_mean=(0, 0), kpts_std=(1, 1), inplace=False):
         super().__init__(mean, std, inplace)
-        self.kpts_mean = tr.as_tensor(kpts_mean)
-        self.kpts_std = tr.as_tensor(kpts_std)
+        self.kpts_mean = tr.as_tensor(kpts_mean, dtype=tr.float32)
+        self.kpts_std = tr.as_tensor(kpts_std, dtype=tr.float32)
 
     def forward(self, sample):
         img, kpts = sample
@@ -115,4 +115,4 @@ class ToTensored(ToTensor):
     """
     def __call__(self, sample):
         img, kpts = sample
-        return super().__call__(img), tr.as_tensor(kpts)
+        return super().__call__(img), tr.as_tensor(kpts, dtype=tr.float32)
